@@ -624,9 +624,20 @@ def _build_menu():
         pystray.MenuItem("Перезапустить прокси", _on_restart),
         pystray.MenuItem("Настройки...", _on_edit_config),
         pystray.MenuItem("Открыть логи", _on_open_logs),
+        pystray.MenuItem("Показать окно", show_main_window_from_tray, default=False),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Выход", _on_exit),
     )
+
+
+def _show_main_window(icon=None, item=None):
+    """Show the main window from tray menu"""
+    global _tray_icon
+    if _tray_icon and hasattr(_tray_icon, 'root') and _tray_icon.root:
+        _tray_icon.root.deiconify()
+        _tray_icon.root.lift()
+        _tray_icon.root.attributes('-topmost', True)
+        _tray_icon.root.after_idle(lambda: _tray_icon.root.attributes('-topmost', False))
 
 
 class TkinterTray:
@@ -704,14 +715,29 @@ class TkinterTray:
                                    anchor="w")
                 btn.pack(fill="x", pady=2)
         
-        # Close button
-        close_btn = ctk.CTkButton(main_frame, text="Закрыть окно (прокси продолжит работу)",
-                                 command=lambda: self.root.withdraw(),
-                                 font=(FONT_FAMILY, 11),
-                                 fg_color=TG_BLUE, hover_color=TG_BLUE_HOVER,
-                                 text_color="#ffffff",
-                                 corner_radius=8, height=36)
-        close_btn.pack(fill="x", pady=(15, 0))
+        # Close button frame
+        btn_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        btn_frame.pack(fill="x", pady=(15, 0))
+        
+        # Minimize to tray button
+        minimize_btn = ctk.CTkButton(btn_frame, text="Свернуть в трей",
+                                    command=lambda: self.root.withdraw(),
+                                    font=(FONT_FAMILY, 11),
+                                    fg_color="#f0f2f5", hover_color="#e0e3e6",
+                                    text_color="#000000",
+                                    corner_radius=8, height=36,
+                                    width=180)
+        minimize_btn.pack(side="left", padx=(0, 10))
+        
+        # Exit button
+        exit_btn = ctk.CTkButton(btn_frame, text="Выход",
+                                command=_on_exit,
+                                font=(FONT_FAMILY, 11),
+                                fg_color="#dc3545", hover_color="#c82333",
+                                text_color="#ffffff",
+                                corner_radius=8, height=36,
+                                width=180)
+        exit_btn.pack(side="right")
         
         # Handle window close
         def on_close():
@@ -740,6 +766,16 @@ def _get_menu_items():
         {'text': '', 'action': None, 'separator': True},
         {'text': "Выход", 'action': _on_exit, 'separator': False},
     ]
+
+
+def show_main_window_from_tray():
+    """Show the main window - used by pystray menu"""
+    global _tray_icon
+    if _tray_icon and hasattr(_tray_icon, 'root') and _tray_icon.root:
+        _tray_icon.root.deiconify()
+        _tray_icon.root.lift()
+        _tray_icon.root.attributes('-topmost', True)
+        _tray_icon.root.after_idle(lambda: _tray_icon.root.attributes('-topmost', False))
 
 
 def run_tray():
