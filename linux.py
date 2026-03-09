@@ -452,6 +452,10 @@ def _edit_config_dialog():
     def on_cancel():
         root.destroy()
 
+    # Handle window close - just hide the settings dialog
+    def on_close_settings():
+        root.withdraw()  # Hide instead of destroy, so proxy keeps running
+    
     btn_frame = ctk.CTkFrame(frame, fg_color="transparent")
     btn_frame.pack(fill="x")
     ctk.CTkButton(btn_frame, text="Сохранить", width=140, height=38,
@@ -466,6 +470,7 @@ def _edit_config_dialog():
                   border_color=FIELD_BORDER,
                   command=on_cancel).pack(side="left")
 
+    root.protocol("WM_DELETE_WINDOW", on_close_settings)
     root.mainloop()
 
 
@@ -712,6 +717,15 @@ class TkinterTray:
                                  text_color="#ffffff",
                                  corner_radius=8, height=36)
         close_btn.pack(fill="x", pady=(15, 0))
+        
+        # Minimize to tray button
+        minimize_btn = ctk.CTkButton(main_frame, text="Свернуть в трей",
+                                    command=lambda: self.root.iconify(),
+                                    font=(FONT_FAMILY, 11),
+                                    fg_color="#f0f2f5", hover_color="#e0e3e6",
+                                    text_color="#000000",
+                                    corner_radius=8, height=36)
+        minimize_btn.pack(fill="x", pady=(8, 0))
         
         # Handle window close
         def on_close():

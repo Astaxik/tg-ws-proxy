@@ -379,6 +379,10 @@ def _edit_config_dialog():
     def on_cancel():
         root.destroy()
 
+    # Handle window close - just hide the settings dialog
+    def on_close_settings():
+        root.withdraw()  # Hide instead of destroy, so proxy keeps running
+
     btn_frame = ctk.CTkFrame(frame, fg_color="transparent")
     btn_frame.pack(fill="x")
     ctk.CTkButton(btn_frame, text="Сохранить", width=140, height=38,
@@ -393,6 +397,7 @@ def _edit_config_dialog():
                   border_color=FIELD_BORDER,
                   command=on_cancel).pack(side="left")
 
+    root.protocol("WM_DELETE_WINDOW", on_close_settings)
     root.mainloop()
 
 
