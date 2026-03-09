@@ -23,8 +23,59 @@ pip3 install customtkinter pystray pyperclip psutil pillow
 
 ## Запуск
 
+### Графический режим (с интерфейсом):
 ```bash
 python3 linux.py
+```
+
+### Фоновый режим (без GUI, для серверов):
+```bash
+python3 linux.py --background
+# или
+python3 linux.py --daemon
+```
+
+### Использование скрипта управления:
+```bash
+# Запуск в фоне
+./tg-ws-proxy.sh start
+
+# Остановка
+./tg-ws-proxy.sh stop
+
+# Перезапуск
+./tg-ws-proxy.sh restart
+
+# Проверка статуса
+./tg-ws-proxy.sh status
+
+# Просмотр логов в реальном времени
+./tg-ws-proxy.sh logs
+```
+
+### Автозагрузка при старте системы (systemd):
+
+Создайте файл `~/.config/systemd/user/tg-ws-proxy.service`:
+```ini
+[Unit]
+Description=TG WS Proxy
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /путь/к/linux.py --background
+Restart=always
+WorkingDirectory=/путь/к/папке
+
+[Install]
+WantedBy=default.target
+```
+
+Активируйте:
+```bash
+systemctl --user daemon-reload
+systemctl --user enable tg-ws-proxy.service
+systemctl --user start tg-ws-proxy.service
 ```
 
 ## Режимы работы

@@ -761,15 +761,18 @@ def run_tray():
 
     start_proxy()
 
-    # Only show first-run dialog if display is available
+    # Check for background mode (no GUI)
     has_display = os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')
-    if has_display:
+    background_mode = '--background' in sys.argv or '--daemon' in sys.argv
+    
+    # Only show first-run dialog if display is available and not in background mode
+    if has_display and not background_mode:
         _show_first_run()
 
     icon_image = _load_icon()
     
-    # Use pystray if available, otherwise fallback to tkinter tray
-    if PYSTRAY_AVAILABLE and pystray is not None:
+    # Use pystray if available, otherwise fallback to tkinter tray or console mode
+    if PYSTRAY_AVAILABLE and pystray is not None and has_display:
         _tray_icon = pystray.Icon(
             APP_NAME,
             icon_image,
@@ -778,7 +781,7 @@ def run_tray():
         
         log.info("Tray icon running (pystray)")
         _tray_icon.run()
-    elif has_display:
+    elif has_display and not background_mode:
         # Fallback to tkinter-based tray window
         log.info("Running tkinter tray fallback")
         menu_items = _get_menu_items()
@@ -786,9 +789,22 @@ def run_tray():
         _tray_icon = tray
         tray.run()
     else:
-        # No display - run in console mode
-        log.info("No display available - running in console mode")
+        # No display or background mode - run in console/daemon mode
+        if has_display:
+            log.info("Running in background mode (--background flag)")
+        else:
+            log.info("No display available - running in console mode")
         log.info("Proxy is running. Press Ctrl+C to stop.")
+        
+        # Setup signal handlers for graceful shutdown
+        def signal_handler(signum, frame):
+            log.info(f"Received signal {signum}, shutting down...")
+            stop_proxy()
+            sys.exit(0)
+        
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        
         try:
             while True:
                 time.sleep(1)
