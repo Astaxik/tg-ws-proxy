@@ -8,7 +8,6 @@ import sys
 import threading
 import time
 import webbrowser
-import pystray
 import pyperclip
 import asyncio as _asyncio
 import customtkinter as ctk
@@ -18,6 +17,15 @@ from PIL import Image, ImageDraw, ImageFont
 import subprocess
 import tkinter
 from tkinter import messagebox
+
+# Try to import pystray, but make it optional for Linux systems without AppIndicator
+try:
+    import pystray
+    PYSTRAY_AVAILABLE = True
+except (ImportError, ValueError, OSError) as e:
+    pystray = None
+    PYSTRAY_AVAILABLE = False
+    print(f"Warning: pystray not available ({e}). System tray icon will be disabled.")
 
 import proxy.tg_ws_proxy as tg_ws_proxy
 
