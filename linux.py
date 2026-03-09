@@ -17,15 +17,20 @@ from PIL import Image, ImageDraw, ImageFont
 import subprocess
 import tkinter
 from tkinter import messagebox
+import signal
 
-# Try to import pystray, but make it optional for Linux systems without AppIndicator
+# Try to import pystray for system tray, fallback to tkinter tray
 try:
-    import pystray
-    PYSTRAY_AVAILABLE = True
+    # Check if DISPLAY is available before importing pystray
+    if os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY'):
+        import pystray
+        PYSTRAY_AVAILABLE = True
+    else:
+        raise OSError("No display available")
 except (ImportError, ValueError, OSError) as e:
     pystray = None
     PYSTRAY_AVAILABLE = False
-    print(f"Warning: pystray not available ({e}). System tray icon will be disabled.")
+    print(f"Info: pystray not available ({e}). Using tkinter tray fallback.")
 
 import proxy.tg_ws_proxy as tg_ws_proxy
 
@@ -624,6 +629,119 @@ def _build_menu():
     )
 
 
+class TkinterTray:
+    """Tkinter-based system tray fallback for Linux without pystray"""
+    
+    def __init__(self, title, icon, menu_items):
+        self.title = title
+        self.icon = icon
+        self.menu_items = menu_items
+        self.root = None
+        self.tray_window = None
+        
+    def run(self):
+        """Run the tkinter tray application"""
+        self.root = ctk.CTk()
+        self.root.title(self.title)
+        self.root.resizable(False, False)
+        self.root.attributes("-topmost", True)
+        
+        # Center on screen
+        w, h = 400, 350
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        self.root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+        
+        TG_BLUE = "#3390ec"
+        TG_BLUE_HOVER = "#2b7cd4"
+        BG = "#ffffff"
+        FONT_FAMILY = "DejaVu Sans"
+        
+        self.root.configure(fg_color=BG)
+        
+        # Main frame
+        main_frame = ctk.CTkFrame(self.root, fg_color=BG, corner_radius=0)
+        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # Header with icon
+        header_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        header_frame.pack(anchor="center", pady=(0, 20))
+        
+        if self.icon:
+            try:
+                icon_img = ctk.CTkImage(light_image=self.icon, size=(64, 64))
+                icon_label = ctk.CTkLabel(header_frame, image=icon_img, text="")
+                icon_label.image = icon_img
+                icon_label.pack(side="left", padx=(0, 15))
+            except Exception:
+                pass
+        
+        ctk.CTkLabel(header_frame, text=self.title,
+                     font=(FONT_FAMILY, 18, "bold"),
+                     text_color="#000000").pack(side="left")
+        
+        # Status label
+        status_var = tkinter.StringVar(value="● Прокси работает")
+        status_label = ctk.CTkLabel(main_frame, textvariable=status_var,
+                                    font=(FONT_FAMILY, 12),
+                                    text_color="#28a745")
+        status_label.pack(anchor="w", pady=(0, 15))
+        
+        # Menu buttons
+        for item in self.menu_items:
+            if item.get('separator'):
+                ctk.CTkFrame(main_frame, fg_color="#d6d9dc", height=1,
+                             corner_radius=0).pack(fill="x", pady=8)
+            else:
+                btn = ctk.CTkButton(main_frame, text=item['text'],
+                                   command=item['action'],
+                                   font=(FONT_FAMILY, 13),
+                                   fg_color="#f0f2f5",
+                                   hover_color="#e0e3e6",
+                                   text_color="#000000",
+                                   corner_radius=8,
+                                   height=40,
+                                   anchor="w")
+                btn.pack(fill="x", pady=2)
+        
+        # Close button
+        close_btn = ctk.CTkButton(main_frame, text="Закрыть окно (прокси продолжит работу)",
+                                 command=lambda: self.root.withdraw(),
+                                 font=(FONT_FAMILY, 11),
+                                 fg_color=TG_BLUE, hover_color=TG_BLUE_HOVER,
+                                 text_color="#ffffff",
+                                 corner_radius=8, height=36)
+        close_btn.pack(fill="x", pady=(15, 0))
+        
+        # Handle window close
+        def on_close():
+            _on_exit()
+        self.root.protocol("WM_DELETE_WINDOW", on_close)
+        
+        self.root.mainloop()
+    
+    def stop(self):
+        if self.root:
+            self.root.quit()
+            self.root.destroy()
+
+
+def _get_menu_items():
+    """Get menu items as a list for tkinter tray"""
+    host = _config.get("host", DEFAULT_CONFIG["host"])
+    port = _config.get("port", DEFAULT_CONFIG["port"])
+    
+    return [
+        {'text': f"Открыть в Telegram ({host}:{port})", 'action': _on_open_in_telegram, 'separator': False},
+        {'text': '', 'action': None, 'separator': True},
+        {'text': "Перезапустить прокси", 'action': _on_restart, 'separator': False},
+        {'text': "Настройки...", 'action': _on_edit_config, 'separator': False},
+        {'text': "Открыть логи", 'action': _on_open_logs, 'separator': False},
+        {'text': '', 'action': None, 'separator': True},
+        {'text': "Выход", 'action': _on_exit, 'separator': False},
+    ]
+
+
 def run_tray():
     global _tray_icon, _config
 
@@ -641,31 +759,42 @@ def run_tray():
     log.info("Config: %s", _config)
     log.info("Log file: %s", LOG_FILE)
 
-    if pystray is None or Image is None:
-        log.error("pystray or Pillow not installed; "
-                  "running in console mode")
-        start_proxy()
+    start_proxy()
+
+    # Only show first-run dialog if display is available
+    has_display = os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')
+    if has_display:
+        _show_first_run()
+
+    icon_image = _load_icon()
+    
+    # Use pystray if available, otherwise fallback to tkinter tray
+    if PYSTRAY_AVAILABLE and pystray is not None:
+        _tray_icon = pystray.Icon(
+            APP_NAME,
+            icon_image,
+            "TG WS Proxy",
+            menu=_build_menu())
+        
+        log.info("Tray icon running (pystray)")
+        _tray_icon.run()
+    elif has_display:
+        # Fallback to tkinter-based tray window
+        log.info("Running tkinter tray fallback")
+        menu_items = _get_menu_items()
+        tray = TkinterTray("TG WS Proxy", icon_image, menu_items)
+        _tray_icon = tray
+        tray.run()
+    else:
+        # No display - run in console mode
+        log.info("No display available - running in console mode")
+        log.info("Proxy is running. Press Ctrl+C to stop.")
         try:
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            stop_proxy()
-        return
-
-    start_proxy()
-
-    _show_first_run()
-
-    icon_image = _load_icon()
-    _tray_icon = pystray.Icon(
-        APP_NAME,
-        icon_image,
-        "TG WS Proxy",
-        menu=_build_menu())
-
-    log.info("Tray icon running")
-    _tray_icon.run()
-
+            log.info("Received interrupt signal")
+    
     stop_proxy()
     log.info("Tray app exited")
 
