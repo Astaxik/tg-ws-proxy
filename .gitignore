@@ -1,29 +1,67 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.egg-info/
-dist/
-build/
-*.spec.bak
+```bash
+# Environment
+.env
+.env.local
+.env.*
 
-# PyInstaller
-*.manifest
+# Logs and temp files
 *.log
+*.tmp
+*.swp
 
-# IDE
+# Editors
 .vscode/
 .idea/
-*.swp
-*.swo
 
-# OS
-Thumbs.db
-Desktop.ini
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git/
+.mypy_cache/
+.pytest_cache/
+.hypothesis/
+
+# Build artifacts
+build/
+dist/
+*.egg
+*.egg-info/
+.eggs/
+.installed.cfg
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.sublime-workspace
+*.der
+*.pem
+*.crt
+*.key
+
+# OS generated files
 .DS_Store
-
-# Project-specific (not for the repo)
-scan_ips.py
-scan.txt
-AyuGramDesktop-dev/
-tweb-master/
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+```
