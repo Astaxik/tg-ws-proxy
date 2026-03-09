@@ -624,7 +624,7 @@ def _build_menu():
         pystray.MenuItem("Перезапустить прокси", _on_restart),
         pystray.MenuItem("Настройки...", _on_edit_config),
         pystray.MenuItem("Открыть логи", _on_open_logs),
-        pystray.MenuItem("Показать окно", show_main_window_from_tray, default=False),
+        pystray.MenuItem("Показать окно", _show_main_window, default=False),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Выход", _on_exit),
     )
@@ -638,6 +638,131 @@ def _show_main_window(icon=None, item=None):
         _tray_icon.root.lift()
         _tray_icon.root.attributes('-topmost', True)
         _tray_icon.root.after_idle(lambda: _tray_icon.root.attributes('-topmost', False))
+
+
+class MainWindow(ctk.CTk):
+    """Main application window with minimize to tray support"""
+    
+    def __init__(self, icon_image):
+        super().__init__()
+        self.icon_image = icon_image
+        self.setup_ui()
+        
+    def setup_ui(self):
+        self.title("TG WS Proxy")
+        self.resizable(False, False)
+        self.attributes("-topmost", True)
+        
+        # Center on screen
+        w, h = 400, 350
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+        self.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+        
+        TG_BLUE = "#3390ec"
+        TG_BLUE_HOVER = "#2b7cd4"
+        BG = "#ffffff"
+        FONT_FAMILY = "DejaVu Sans"
+        
+        self.configure(fg_color=BG)
+        
+        # Main frame
+        main_frame = ctk.CTkFrame(self, fg_color=BG, corner_radius=0)
+        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # Header with icon
+        header_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        header_frame.pack(anchor="center", pady=(0, 20))
+        
+        if self.icon_image:
+            try:
+                icon_img = ctk.CTkImage(light_image=self.icon_image, size=(64, 64))
+                icon_label = ctk.CTkLabel(header_frame, image=icon_img, text="")
+                icon_label.image = icon_img
+                icon_label.pack(side="left", padx=(0, 15))
+            except Exception:
+                pass
+        
+        ctk.CTkLabel(header_frame, text="TG WS Proxy",
+                     font=(FONT_FAMILY, 18, "bold"),
+                     text_color="#000000").pack(side="left")
+        
+        # Status label
+        status_var = tkinter.StringVar(value="● Прокси работает")
+        status_label = ctk.CTkLabel(main_frame, textvariable=status_var,
+                                    font=(FONT_FAMILY, 12),
+                                    text_color="#28a745")
+        status_label.pack(anchor="w", pady=(0, 15))
+        
+        # Config info
+        host = _config.get("host", DEFAULT_CONFIG["host"])
+        port = _config.get("port", DEFAULT_CONFIG["port"])
+        info_text = f"Прокси: {host}:{port}\nDC: {len(_config.get('dc_ip', DEFAULT_CONFIG['dc_ip']))} серверов"
+        info_label = ctk.CTkLabel(main_frame, text=info_text,
+                                  font=(FONT_FAMILY, 11),
+                                  text_color="#707579",
+                                  justify="left")
+        info_label.pack(anchor="w", pady=(0, 15))
+        
+        # Menu buttons
+        menu_items = [
+            ("Открыть в Telegram", _on_open_in_telegram),
+            ("Перезапустить прокси", _on_restart),
+            ("Настройки...", _on_edit_config),
+            ("Открыть логи", _on_open_logs),
+        ]
+        
+        for text, action in menu_items:
+            btn = ctk.CTkButton(main_frame, text=text,
+                               command=action,
+                               font=(FONT_FAMILY, 13),
+                               fg_color="#f0f2f5",
+                               hover_color="#e0e3e6",
+                               text_color="#000000",
+                               corner_radius=8,
+                               height=40,
+                               anchor="w")
+            btn.pack(fill="x", pady=2)
+        
+        # Button frame
+        btn_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        btn_frame.pack(fill="x", pady=(15, 0))
+        
+        # Minimize to tray button
+        minimize_btn = ctk.CTkButton(btn_frame, text="Свернуть в трей",
+                                    command=self._minimize_to_tray,
+                                    font=(FONT_FAMILY, 11),
+                                    fg_color="#f0f2f5", hover_color="#e0e3e6",
+                                    text_color="#000000",
+                                    corner_radius=8, height=36,
+                                    width=180)
+        minimize_btn.pack(side="left", padx=(0, 10))
+        
+        # Exit button
+        exit_btn = ctk.CTkButton(btn_frame, text="Выход",
+                                command=_on_exit,
+                                font=(FONT_FAMILY, 11),
+                                fg_color="#dc3545", hover_color="#c82333",
+                                text_color="#ffffff",
+                                corner_radius=8, height=36,
+                                width=180)
+        exit_btn.pack(side="right")
+        
+        # Handle window close - minimize to tray instead of exit
+        def on_close():
+            self._minimize_to_tray()
+        self.protocol("WM_DELETE_WINDOW", on_close)
+    
+    def _minimize_to_tray(self):
+        """Hide window and show notification"""
+        self.withdraw()
+        # Show notification that app is still running in tray
+        try:
+            subprocess.run(['notify-send', '-i', 'network-workgroup', 
+                          'TG WS Proxy', 'Приложение свёрнуто в трей'], 
+                         check=False, timeout=2)
+        except Exception:
+            pass
 
 
 class TkinterTray:
@@ -807,7 +932,7 @@ def run_tray():
 
     icon_image = _load_icon()
     
-    # Use pystray if available, otherwise fallback to tkinter tray or console mode
+    # Use pystray if available, otherwise fallback to tkinter main window or console mode
     if PYSTRAY_AVAILABLE and pystray is not None and has_display:
         _tray_icon = pystray.Icon(
             APP_NAME,
@@ -818,12 +943,11 @@ def run_tray():
         log.info("Tray icon running (pystray)")
         _tray_icon.run()
     elif has_display and not background_mode:
-        # Fallback to tkinter-based tray window
-        log.info("Running tkinter tray fallback")
-        menu_items = _get_menu_items()
-        tray = TkinterTray("TG WS Proxy", icon_image, menu_items)
-        _tray_icon = tray
-        tray.run()
+        # Show main window with minimize to tray button
+        log.info("Running main window with minimize to tray support")
+        _main_window = MainWindow(icon_image)
+        _tray_icon = _main_window  # Store reference for tray operations
+        _main_window.mainloop()
     else:
         # No display or background mode - run in console/daemon mode
         if has_display:
